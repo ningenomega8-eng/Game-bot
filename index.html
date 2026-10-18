@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta property="og:title" content="Burung Terbang">
+<meta property="og:description" content="Tap untuk terbang, lewati pipa sejauh mungkin!">
+<meta property="og:type" content="website">
+<meta name="description" content="Tap untuk terbang, lewati pipa sejauh mungkin!">
+<title>Burung Terbang</title>
+<style>
+  :root{--bg:#0f1629;--card:#18213d;--ink:#eef2ff;--mute:#8b97bd;--acc:#ffd23f}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif;overflow:hidden;touch-action:none}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;gap:10px}
+  .head{width:100%;max-width:420px;display:flex;justify-content:space-between;align-items:flex-end}
+  .tag{font-size:11px;letter-spacing:.14em;color:var(--acc);text-transform:uppercase}
+  h1{margin:2px 0 0;font-size:22px}
+  .sc{text-align:right}.sc b{font-size:28px;display:block;line-height:1}.sc span{font-size:11px;color:var(--mute)}
+  canvas{width:100%;max-width:420px;max-height:calc(100vh - 130px);aspect-ratio:360/560;border-radius:14px;background:#7ad3ea;display:block}
+  .hint{font-size:12px;color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div><div class="tag">Game Bot</div><h1>Burung Terbang</h1></div>
+    <div class="sc"><b id="score">0</b><span>TERBAIK <span id="best">0</span></span></div>
+  </div>
+  <canvas id="c" width="360" height="560"></canvas>
+  <div class="hint">Tap layar / spasi untuk terbang</div>
+</div>
+<script>
+(function(){
+  var cv=document.getElementById('c'),ctx=cv.getContext('2d');
+  var W=360,H=560,GROUND=60;
+  var best=0;
+  try{best=+localStorage.getItem('bt_best')||0}catch(e){}
+  document.getElementById('best').textContent=best;
+  var scoreEl=document.getElementById('score');
+
+  var state='ready',bird,pipes,score,frame,clouds=[];
+  for(var i=0;i<4;i++)clouds.push({x:Math.random()*W,y:40+Math.random()*180,s:.2+Math.random()*.3});
+
+  function reset(){
+    bird={x:90,y:H/2-30,vy:0,r:13,rot:0};
+    pipes=[];score=0;frame=0;scoreEl.textContent=0;
+  }
+  reset();
+
+  function flap(){
+    if(state==='ready'){state='play'}
+    if(state==='play'){bird.vy=-6.6}
+    else if(state==='over'&&frame>25){state='ready';reset()}
+  }
+  cv.addEventListener('pointerdown',function(e){e.preventDefault();flap()});
+  window.addEventListener('keydown',function(e){if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();flap()}});
+
+  function addPipe(){
+    var gap=140,min=70,max=H-GROUND-gap-70;
+    pipes.push({x:W+10,top:min+Math.random()*(max-min),gap:gap,w:54,passed:false});
+  }
+
+  function die(){
+    state='over';frame=0;
+    if(score>best){best=score;document.getElementById('best').textContent=best;try{localStorage.setItem('bt_best',best)}catch(e){}}
+  }
+
+  function update(){
+    frame++;
+    clouds.forEach(function(c){c.x-=c.s;if(c.x<-60)c.x=W+60});
+    if(state==='ready'){bird.y=H/2-30+Math.sin(frame/12)*6;return}
+    if(state==='over'){
+      if(bird.y<H-GROUND-bird.r){bird.vy+=.5;bird.y+=bird.vy;bird.rot=Math.min(1.5,bird.rot+.1)}
+      return;
+    }
+    bird.vy+=.38;bird.y+=bird.vy;
+    bird.rot=Math.max(-.45,Math.min(1.2,bird.vy*.08));
+    if(frame%92===1)addPipe();
+    for(var i=pipes.length-1;i>=0;i--){
+      var p=pipes[i];p.x-=2.3;
+      if(!p.passed&&p.x+p.w<bird.x){p.passed=true;score++;scoreEl.textContent=score}
+      if(p.x+p.w<-5)pipes.splice(i,1);
+      var inX=bird.x+bird.r>p.x&&bird.x-bird.r<p.x+p.w;
+      if(inX&&(bird.y-bird.r<p.top||bird.y+bird.r>p.top+p.gap))die();
+    }
+    if(bird.y+bird.r>=H-GROUND||bird.y-bird.r<-40){bird.y=Math.min(bird.y,H-GROUND-bird.r);die()}
+  }
+
+  function drawPipe(x,y,w,h,cap){
+    ctx.fillStyle='#4caf50';ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='#7bd36b';ctx.fillRect(x+5,y,8,h);
+    ctx.fillStyle='#2e7d32';ctx.fillRect(x+w-8,y,8,h);
+    var cy=cap==='bottom'?y+h-22:y;
+    ctx.fillStyle='#43a047';ctx.fillRect(x-4,cy,w+8,22);
+    ctx.fillStyle='#2e7d32';ctx.strokeStyle='#1b5e20';ctx.lineWidth=2;ctx.strokeRect(x-4,cy,w+8,22);
+  }
+
+  function drawBird(){
+    ctx.save();ctx.translate(bird.x,bird.y);ctx.rotate(bird.rot);
+    ctx.fillStyle='#ffca28';ctx.beginPath();ctx.ellipse(0,0,16,12,0,0,7);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(7,-4,5,0,7);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(9,-4,2.2,0,7);ctx.fill();
+    ctx.fillStyle='#ff7043';ctx.beginPath();ctx.moveTo(13,0);ctx.lineTo(23,3);ctx.lineTo(13,7);ctx.fill();
+    ctx.fillStyle='#f9a825';var wy=Math.sin(frame/3)*4;
+    ctx.beginPath();ctx.ellipse(-4,3+wy/2,8,5,-.3,0,7);ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(){
+    var g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#6ec6ee');g.addColorStop(1,'#bfeaf5');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='rgba(255,255,255,.75)';
+    clouds.forEach(function(c){ctx.beginPath();ctx.arc(c.x,c.y,18,0,7);ctx.arc(c.x+18,c.y+4,14,0,7);ctx.arc(c.x-16,c.y+5,12,0,7);ctx.fill()});
+    // kota di kejauhan
+    ctx.fillStyle='rgba(120,170,200,.55)';
+    for(var i=0;i<9;i++){var bh=40+((i*37)%50);ctx.fillRect(i*44-((frame*.4)%44),H-GROUND-bh,34,bh)}
+    pipes.forEach(function(p){drawPipe(p.x,0,p.w,p.top,'bottom');drawPipe(p.x,p.top+p.gap,p.w,H-GROUND-(p.top+p.gap),'top')});
+    ctx.fillStyle='#8bc34a';ctx.fillRect(0,H-GROUND,W,14);
+    ctx.fillStyle='#d7b56d';ctx.fillRect(0,H-GROUND+14,W,GROUND-14);
+    ctx.fillStyle='#c4a15a';
+    for(var k=0;k<14;k++)ctx.fillRect(k*30-((frame*2.3)%30),H-GROUND+22,16,6);
+    drawBird();
+    ctx.textAlign='center';
+    if(state==='play'){ctx.fillStyle='#fff';ctx.strokeStyle='#0008';ctx.lineWidth=5;ctx.font='bold 44px system-ui';ctx.strokeText(score,W/2,80);ctx.fillText(score,W/2,80)}
+    if(state==='ready'){ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(60,170,240,70);ctx.fillStyle='#fff';ctx.font='bold 22px system-ui';ctx.fillText('TAP UNTUK MULAI',W/2,212)}
+    if(state==='over'){
+      ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(50,170,260,140);
+      ctx.fillStyle='#ffd23f';ctx.font='bold 28px system-ui';ctx.fillText('GAME OVER',W/2,212);
+      ctx.fillStyle='#fff';ctx.font='18px system-ui';ctx.fillText('Skor '+score+'  •  Terbaik '+best,W/2,248);
+      ctx.font='14px system-ui';ctx.fillStyle='#cfd8ff';ctx.fillText('Tap untuk main lagi',W/2,284);
+    }
+  }
+
+  function loop(){update();draw();requestAnimationFrame(loop)}
+  loop();
+})();
+</script>
+</body>
+</html>
